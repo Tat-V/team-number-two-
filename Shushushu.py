@@ -55,7 +55,7 @@ def decorator_error(func):
 @decorator_error
 def start(update: Update, context: CallbackContext):
     """Send a message when the command /start is issued."""
-    update.message.reply_text(f'Привет, {update.effective_user.first_name}!', print(gasga))
+    update.message.reply_text(f'Привет, {update.effective_user.first_name}!')
 
 
 @log_action
