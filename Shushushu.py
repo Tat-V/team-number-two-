@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
+import datetime
 from functools import wraps
 from setup import PROXY, TOKEN
 from telegram import Bot, Update
@@ -32,11 +33,18 @@ def log_action(function):
             'user': update.effective_user.first_name,
             'user id': update.message.chat.id,
             'function': function.__name__,
-            'message': update.message.text, })
-            with open("History.txt", "a", encoding="UTF-8") as file_h:
-                for key, value in LOG_ACTIONS[-1].items():
-                    file_h.write(key + ':' + (str(value)) + "\t")
-                file_h.write("\n")
+            'message': update.message.text,
+            'time': datetime.datetime.now().strftime("%Y-%m-%d %H.%M"), })
+            if str(LOG_ACTIONS[-1]['function']).find('admin') == -1:
+                with open("History.txt", "a", encoding="UTF-8") as file_h:
+                    for key, value in LOG_ACTIONS[-1].items():
+                        file_h.write(key + ':' + (str(value)) + "\t")
+                    file_h.write("\n")
+            elif str(LOG_ACTIONS[-1]['function']).find('admin') != -1:
+                with open("Admin_History.txt", "a", encoding="UTF-8") as handler:
+                    for key, value in LOG_ACTIONS[-1].items():
+                        handler.write(key + ':' + (str(value)) + "\t")
+                    handler.write("\n")
         return function(*args, **kwargs)
     return inner
 
@@ -55,7 +63,8 @@ def decorator_error(func):
 @decorator_error
 def start(update: Update, context: CallbackContext):
     """Send a message when the command /start is issued."""
-    update.message.reply_text(f'Привет, {update.effective_user.first_name}!')
+    update.message.reply_text(f'Привет, {update.effective_user.first_name}!\nОтправь команду /list, чтобы получить '
+                              f'список команд!')
 
 
 @log_action
@@ -63,6 +72,20 @@ def start(update: Update, context: CallbackContext):
 def chat_help(update: Update, context: CallbackContext):
     """Send a message when the command /help is issued."""
     update.message.reply_text('Введи команду /start для начала. ')
+
+@log_action
+@decorator_error
+def admin_settings(update: Update, context: CallbackContext):
+    """Send a list of AdminOnly commands"""
+    if update.effective_user.first_name =='Meseyoshi':
+        update.message.reply_text('Список функций для администрирования: ')
+
+
+@log_action
+@decorator_error
+def chat_list(update: Update, context: CallbackContext):
+    """Send a list of all available functions when the command /list is issued."""
+    update.message.reply_text('Доступные команды:\n/start\n/help\n/history')
 
 
 @log_action
@@ -92,6 +115,9 @@ def history(update: Update, context: CallbackContext):
         update.message.reply_text(hist)
 
 
+
+
+
 def main():
     bot = Bot(
         token=TOKEN,
@@ -103,6 +129,8 @@ def main():
     updater.dispatcher.add_handler(CommandHandler('start', start))
     updater.dispatcher.add_handler(CommandHandler('help', chat_help))
     updater.dispatcher.add_handler(CommandHandler('history', history))
+    updater.dispatcher.add_handler(CommandHandler('list', chat_list))
+    updater.dispatcher.add_handler(CommandHandler('adminsettings', admin_settings))
 
     # on noncommand i.e message - echo the message on Telegram
     updater.dispatcher.add_handler(MessageHandler(Filters.text, echo))
