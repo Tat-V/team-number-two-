@@ -3,11 +3,12 @@
 
 import logging
 import datetime
+import requests
 from functools import wraps
 from setup import PROXY, TOKEN
 from telegram import Bot, Update
 from telegram.ext import CallbackContext, CommandHandler, Filters, MessageHandler, Updater
-
+import random
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -78,17 +79,20 @@ def chat_help(update: Update, context: CallbackContext):
 def admin_settings(update: Update, context: CallbackContext):
     """Send a list of AdminOnly commands"""
     if update.effective_user.first_name =='Meseyoshi':
-        update.message.reply_text('Список функций для администрирования: ')
+        update.message.reply_text('Список функций для администрирования:\n/clean ')
+
+
 
 
 @log_action
 @decorator_error
 def chat_list(update: Update, context: CallbackContext):
     """Send a list of all available functions when the command /list is issued."""
-    update.message.reply_text('Доступные команды:\n/start\n/help\n/history')
+    update.message.reply_text('Доступные команды:\n/start\n/help\n/history\n/fact')
 
 
 @log_action
+@decorator_error
 def echo(update: Update, context: CallbackContext):
     """Echo the user message."""
     update.message.reply_text(update.message.text)
@@ -114,9 +118,46 @@ def history(update: Update, context: CallbackContext):
             hist = "\t".join(hist_all)
         update.message.reply_text(hist)
 
+@log_action
+@decorator_error
+def admin_check_period(update: Update, context: CallbackContext):
+    k = 0
+    with open("History.txt", "r", encoding="UTF-8") as file_h:
+        hist_all = file_h.readlines()
+    for hist_line in hist_all:
+        hist_line = hist_line.split('\t')
+        hist_time = hist_line[-2].replace('time:', '')
+        hist_time = datetime.datetime.strptime(hist_time, "%Y-%m-%d %H.%M")
+        now = datetime.datetime.now()
+        period = now - hist_time
+        print(period)
+        if period.days < 7:
+            break
+        k += 1
+        print(k)
+    with open('History.txt', 'w') as file_h:
+        file_h.writelines(hist_all[k:])
+    mes = 'Готово!'
+    update.message.reply_text(mes)
 
 
-
+@log_action
+@decorator_error
+def fact(update: Update, context: CallbackContext):
+    r = requests.get('https://cat-fact.herokuapp.com/facts')
+    cat_fact = ''
+    if r.status_code == 200:
+        cats_dict = dict(r.json())
+        cats_dict = cats_dict.get('all')
+        kol_fact = len(cats_dict)
+        fact_upvotes = cats_dict[0]['upvotes']
+        cat_fact = cats_dict[0]['text']
+        for i in range(1, kol_fact):
+            if cats_dict[i]['upvotes'] > fact_upvotes:
+                fact_upvotes = cats_dict[i]['upvotes']
+                cat_fact = cats_dict[i]['text']
+    print(cat_fact)
+    update.message.reply_text(cat_fact)
 
 def main():
     bot = Bot(
@@ -130,7 +171,9 @@ def main():
     updater.dispatcher.add_handler(CommandHandler('help', chat_help))
     updater.dispatcher.add_handler(CommandHandler('history', history))
     updater.dispatcher.add_handler(CommandHandler('list', chat_list))
-    updater.dispatcher.add_handler(CommandHandler('adminsettings', admin_settings))
+    updater.dispatcher.add_handler(CommandHandler('settings', admin_settings))
+    updater.dispatcher.add_handler(CommandHandler('clean', admin_check_period))
+    updater.dispatcher.add_handler(CommandHandler('fact', fact))
 
     # on noncommand i.e message - echo the message on Telegram
     updater.dispatcher.add_handler(MessageHandler(Filters.text, echo))
