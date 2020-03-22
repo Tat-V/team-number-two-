@@ -2,13 +2,15 @@
 # -*- coding: utf-8 -*-
 
 import logging
-import datetime
+import random
+from datetime import datetime
 import requests
 from functools import wraps
+from selenium import webdriver
+import pandas as pd
 from setup import PROXY, TOKEN
-from telegram import Bot, Update
+from telegram import Bot, Update, InputMediaPhoto, PhotoSize, bot
 from telegram.ext import CallbackContext, CommandHandler, Filters, MessageHandler, Updater
-import random
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -23,9 +25,6 @@ LOG_ACTIONS = []
 
 
 
-
-
-
 def log_action(function):
     def inner(*args, **kwargs):
         update = args[0]
@@ -35,7 +34,7 @@ def log_action(function):
             'user id': update.message.chat.id,
             'function': function.__name__,
             'message': update.message.text,
-            'time': datetime.datetime.now().strftime("%Y-%m-%d %H.%M"), })
+            'time': datetime.now().strftime("%Y-%m-%d %H.%M"), })
             if str(LOG_ACTIONS[-1]['function']).find('admin') == -1:
                 with open("History.txt", "a", encoding="UTF-8") as file_h:
                     for key, value in LOG_ACTIONS[-1].items():
@@ -76,12 +75,68 @@ def chat_help(update: Update, context: CallbackContext):
 
 @log_action
 @decorator_error
+def rbc_news(update: Update, context: CallbackContext):
+    options = webdriver.FirefoxOptions()
+    options.add_argument('headless')
+    #options.add_argument(f'window-size={512},{512}')
+    options.add_argument('hide-scrollbars')
+
+    driver = webdriver.Firefox(firefox_options=options)
+    driver.get("https://nn.rbc.ru/")
+    driver.get_screenshot_as_file('img_news.png')
+    driver.quit()
+
+    img = open('img_news.png', 'rb')
+    Bot.send_photo(update.message.chat.id, img)
+    # url = "https://api.telegram.org/bot<1106935180:AAE6Ho9x2n50edAqLb7d2-mmWx0O8WczHzY>/sendPhoto";
+    # files = {'photo': img}
+    # data = {'chat_id': update.message.chat.id}
+    # r = requests.post(url, files=files, data=data)
+    # print(r.json())
+
+@log_action
+@decorator_error
 def admin_settings(update: Update, context: CallbackContext):
     """Send a list of AdminOnly commands"""
     if update.effective_user.first_name =='Meseyoshi':
-        update.message.reply_text('Список функций для администрирования:\n/clean ')
+        update.message.reply_text('Список функций для администрирования:\n/clean  ')
+
+@log_action
+@decorator_error
+def covid(update: Update, context: CallbackContext):
+    '''Send user top-5 covid infected provinces'''
+
+    y = str(datetime.now().date())[: 4]
+    m = str(datetime.now().date())[5: 7]
+    d = int(str(datetime.now().date())[8:]) - 1
+
+    url=f'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{m}-{d}-{y}.csv'
+    data = pd.read_csv(url)
+    data = data.sort_values('Confirmed', ascending=False)
+    data['Province/State'] = data['Province/State'].fillna('')
+    top_5 = data[['Province/State', 'Country/Region', 'Last Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
+
+    text = ''
+    for col in top_5:
+        text += col + '\t\t'
+    text += '\n\n'
+    for i in top_5.values:
+        for j in i:
+            text += str(j) + '\t\t'
+        text += '\n\n'
+    update.message.reply_text(text)
+#top_5.to_json(orient='values')
 
 
+@log_action
+@decorator_error
+def smile(update: Update, context: CallbackContext):
+    '''Send user a smile'''
+    smiles = ["\U0001F601", "Грузовичок" + "\U0001F69A" + "Везет улыбочки!", "\U0001F601", "\U0001F606",
+              "\U0001F60B", "\U0001F60F", "\U0001F609", "\U0001F606",
+              "\U0001F633" + "Задача для сеньора" + "\U0001F633"]
+    s = random.randint(0, len(smiles) - 1)
+    update.message.reply_text(smiles[s])
 
 
 @log_action
@@ -127,8 +182,8 @@ def admin_check_period(update: Update, context: CallbackContext):
     for hist_line in hist_all:
         hist_line = hist_line.split('\t')
         hist_time = hist_line[-2].replace('time:', '')
-        hist_time = datetime.datetime.strptime(hist_time, "%Y-%m-%d %H.%M")
-        now = datetime.datetime.now()
+        hist_time = datetime.strptime(hist_time, "%Y-%m-%d %H.%M")
+        now = datetime.now()
         period = now - hist_time
         print(period)
         if period.days < 7:
@@ -139,6 +194,7 @@ def admin_check_period(update: Update, context: CallbackContext):
         file_h.writelines(hist_all[k:])
     mes = 'Готово!'
     update.message.reply_text(mes)
+
 
 
 @log_action
@@ -156,7 +212,6 @@ def fact(update: Update, context: CallbackContext):
             if cats_dict[i]['upvotes'] > fact_upvotes:
                 fact_upvotes = cats_dict[i]['upvotes']
                 cat_fact = cats_dict[i]['text']
-    print(cat_fact)
     update.message.reply_text(cat_fact)
 
 def main():
@@ -174,6 +229,9 @@ def main():
     updater.dispatcher.add_handler(CommandHandler('settings', admin_settings))
     updater.dispatcher.add_handler(CommandHandler('clean', admin_check_period))
     updater.dispatcher.add_handler(CommandHandler('fact', fact))
+    updater.dispatcher.add_handler(CommandHandler('news', rbc_news))
+    updater.dispatcher.add_handler(CommandHandler('covid', covid))
+    updater.dispatcher.add_handler(CommandHandler('smile', smile))
 
     # on noncommand i.e message - echo the message on Telegram
     updater.dispatcher.add_handler(MessageHandler(Filters.text, echo))
