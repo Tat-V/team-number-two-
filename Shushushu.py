@@ -3,7 +3,7 @@
 
 import logging
 import random
-from datetime import datetime
+from datetime import datetime, date, timedelta
 import requests
 from functools import wraps
 from selenium import webdriver
@@ -106,9 +106,10 @@ def admin_settings(update: Update, context: CallbackContext):
 def covid(update: Update, context: CallbackContext):
     '''Send user top-5 covid infected provinces'''
 
-    y = str(datetime.now().date())[: 4]
-    m = str(datetime.now().date())[5: 7]
-    d = int(str(datetime.now().date())[8:]) - 1
+    yesterday = date.today() - timedelta(days=1)
+    y = str(yesterday)[: 4]
+    m = str(yesterday)[5: 7]
+    d = str(yesterday)[8:]
 
     url=f'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{m}-{d}-{y}.csv'
     data = pd.read_csv(url)
