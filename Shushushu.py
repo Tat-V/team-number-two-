@@ -105,6 +105,28 @@ def admin_settings(update: Update, context: CallbackContext):
 
 @log_action
 @decorator_error
+def film(update: Update, context: CallbackContext):
+    text = open('Film Library.txt','r')
+    film_list = text.read().split()
+    film_name = film_list[random.randint(0, len(film_list)-1)]
+    url = f"https://imdb-internet-movie-database-unofficial.p.rapidapi.com/film/{film_name}"
+    headers = {
+        'x-rapidapi-host': "imdb-internet-movie-database-unofficial.p.rapidapi.com",
+        'x-rapidapi-key': "99bdeb0c42mshab03bca44e75a6fp188e06jsn6d8755719252"
+    }
+    r = requests.request("GET", url, headers=headers)
+    r = dict(r.json())
+    title = r['title']
+    rating = r['rating']
+    length = r['length']
+    main_role = r['cast'][0]['actor']
+    update.message.reply_text('Название: '+title+'\n'+'Рейтинг на IMDb: '+rating+'\n'+'Длительность: '+length+'\n'+'В '
+                             'главной роли: '+main_role)
+
+
+
+@log_action
+@decorator_error
 def covid(update: Update, context: CallbackContext):
     '''Send user top-5 covid infected provinces'''
 
@@ -148,7 +170,7 @@ def smile(update: Update, context: CallbackContext):
 @decorator_error
 def chat_list(update: Update, context: CallbackContext):
     """Send a list of all available functions when the command /list is issued."""
-    update.message.reply_text('Доступные команды:\n/start\n/help\n/history\n/fact')
+    update.message.reply_text('Доступные команды:\n/start\n/help\n/history\n/fact\n/weather\n/smile\n/film\n/covid')
 
 
 @log_action
@@ -259,7 +281,7 @@ def main():
     updater.dispatcher.add_handler(CommandHandler('covid', covid))
     updater.dispatcher.add_handler(CommandHandler('smile', smile))
     updater.dispatcher.add_handler(CommandHandler('weather', weather))
-
+    updater.dispatcher.add_handler(CommandHandler('film', film))
 
     # on noncommand i.e message - echo the message on Telegram
     updater.dispatcher.add_handler(MessageHandler(Filters.text, echo))
