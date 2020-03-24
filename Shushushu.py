@@ -116,8 +116,10 @@ def covid(update: Update, context: CallbackContext):
     url=f'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{m}-{d}-{y}.csv'
     data = pd.read_csv(url)
     data = data.sort_values('Confirmed', ascending=False)
-    data['Province/State'] = data['Province/State'].fillna('')
-    top_5 = data[['Province/State', 'Country/Region', 'Last Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
+    # data['Province/State'] = data['Province/State'].fillna('')
+    data['Province_State'] = data['Province_State'].fillna('')
+    # top_5 = data[['Province/State', 'Country/Region', 'Last Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
+    top_5 = data[['Province_State', 'Country_Region', 'Last_Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
 
     text = ''
     for col in top_5:
