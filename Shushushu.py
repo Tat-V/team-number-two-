@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 LOG_ACTIONS = []
 
 
-
 def log_action(function):
     def inner(*args, **kwargs):
         update = args[0]
@@ -73,6 +72,7 @@ def chat_help(update: Update, context: CallbackContext):
     """Send a message when the command /help is issued."""
     update.message.reply_text('Введи команду /start для начала. ')
 
+
 @log_action
 @decorator_error
 def rbc_news(update: Update, context: CallbackContext):
@@ -94,12 +94,14 @@ def rbc_news(update: Update, context: CallbackContext):
     # r = requests.post(url, files=files, data=data)
     # print(r.json())
 
+
 @log_action
 @decorator_error
 def admin_settings(update: Update, context: CallbackContext):
     """Send a list of AdminOnly commands"""
     if update.effective_user.first_name =='Meseyoshi':
         update.message.reply_text('Список функций для администрирования:\n/clean  ')
+
 
 @log_action
 @decorator_error
@@ -197,6 +199,26 @@ def admin_check_period(update: Update, context: CallbackContext):
     update.message.reply_text(mes)
 
 
+@log_action
+@decorator_error
+def weather(update: Update, context: CallbackContext):
+    TOKEN = 'd081cc3b0aa6fbb8e8f24d1a8216be49'
+    CITY = 'Nizhny Novgorod'
+    url = f'http://api.weatherstack.com/current?access_key={TOKEN}&query={CITY}'
+
+    r = requests.get(url)
+    r = r.json()
+    city = r.get('request')['query']
+    time = r.get('current')['observation_time']
+    temperature = r.get('current')['temperature']
+    weather_descriptions = r.get('current')['weather_descriptions'][0]
+    wind_speed = r.get('current')['wind_speed']
+    wind_speed = round(wind_speed * 1000.0 / 3600.0)
+    weather_now = 'Город: ' + city + '\n' + 'Время снятия данных: ' + str(time) + '\n' + 'Температура: ' +\
+                  str(temperature) + '℃' + '\n' + 'Скорость ветра: ' + str(wind_speed) + ' м/c' + '\n'\
+                  + weather_descriptions
+    update.message.reply_text(weather_now)
+
 
 @log_action
 @decorator_error
@@ -214,6 +236,7 @@ def fact(update: Update, context: CallbackContext):
                 fact_upvotes = cats_dict[i]['upvotes']
                 cat_fact = cats_dict[i]['text']
     update.message.reply_text(cat_fact)
+
 
 def main():
     bot = Bot(
@@ -233,6 +256,8 @@ def main():
     updater.dispatcher.add_handler(CommandHandler('news', rbc_news))
     updater.dispatcher.add_handler(CommandHandler('covid', covid))
     updater.dispatcher.add_handler(CommandHandler('smile', smile))
+    updater.dispatcher.add_handler(CommandHandler('weather', weather))
+
 
     # on noncommand i.e message - echo the message on Telegram
     updater.dispatcher.add_handler(MessageHandler(Filters.text, echo))
