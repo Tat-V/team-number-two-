@@ -8,6 +8,7 @@ import requests
 from functools import wraps
 from selenium import webdriver
 import pandas as pd
+import matplotlib.pyplot as plt
 from setup import PROXY, TOKEN
 from telegram import Bot, Update, InputMediaPhoto, PhotoSize, bot
 from telegram.ext import CallbackContext, CommandHandler, Filters, MessageHandler, Updater
@@ -116,9 +117,9 @@ def covid(update: Update, context: CallbackContext):
     url=f'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{m}-{d}-{y}.csv'
     data = pd.read_csv(url)
     data = data.sort_values('Confirmed', ascending=False)
-    # data['Province/State'] = data['Province/State'].fillna('')
+    #data['Province/State'] = data['Province/State'].fillna('')
     data['Province_State'] = data['Province_State'].fillna('')
-    # top_5 = data[['Province/State', 'Country/Region', 'Last Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
+    #top_5 = data[['Province/State', 'Country/Region', 'Last Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
     top_5 = data[['Province_State', 'Country_Region', 'Last_Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
 
     text = ''
@@ -129,8 +130,45 @@ def covid(update: Update, context: CallbackContext):
         for j in i:
             text += str(j) + '\t\t'
         text += '\n\n'
+
+    week_ago = date.today() - timedelta(days=7)
+    y = str(week_ago)[: 4]
+    m = str(week_ago)[5: 7]
+    d = str(week_ago)[8:]
+
+    url = f'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{m}-{d}-{y}.csv'
+    data_ago = pd.read_csv(url)
+    data_ago = data_ago.sort_values('Confirmed', ascending=False)
+
+    all_confirmed = data['Confirmed'].sum()
+    all_confirmed_ago = data_ago['Confirmed'].sum()
+    all_dead = data['Deaths'].sum()
+    all_dead_ago = data_ago['Deaths'].sum()
+    all_recov = data['Recovered'].sum()
+    all_recov_ago = data_ago['Recovered'].sum()
+
+    fig, ax = plt.subplots(figsize=(15, 15))
+    ax.bar("Confirmed til yesterday", all_confirmed, color="#FFA07A")
+    ax.bar("Confirmed til week ago", all_confirmed_ago, color="#7CFC00")
+    ax.bar("Dead til yesterday", all_dead, color="#FFA07A")
+    ax.bar("Dead til week ago", all_dead_ago, color="#7CFC00")
+    ax.bar("Recovered til yesterday", all_recov, color="#FFA07A")
+    ax.bar("Recovered til week ago", all_recov_ago, color="#7CFC00")
+    plt.title("Covid_statistics")
+    fig.savefig("Covid_statistics")
+
+    fig, ax = plt.subplots(figsize=(15, 15))
+
+    ax.bar("Confirmed", all_confirmed - all_confirmed_ago, color="#FFA07A")
+    ax.bar("Dead", all_dead - all_dead_ago, color="#B0E0E6")
+    ax.bar("Recovered", all_recov - all_recov_ago, color="#7CFC00")
+    plt.title("Weekly changes in...")
+    fig.savefig("Covid_weekly_changes")
+
+    update.message.reply_text('There you can find some statistic about top-5 covid injected regions')
     update.message.reply_text(text)
-#top_5.to_json(orient='values')
+    bot.send_photo(update.message.chat.id, open('Covid_statistics.png', 'rb'))
+    bot.send_photo(update.message.chat.id, open('Covid_weekly_changes.png', 'rb'))
 
 
 @log_action
