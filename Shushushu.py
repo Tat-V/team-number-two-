@@ -9,7 +9,7 @@ from functools import wraps
 from selenium import webdriver
 import pandas as pd
 import matplotlib.pyplot as plt
-from setup import PROXY, TOKEN
+from setup import PROXY, TOKEN, TOKEN_WEATHER
 from telegram import Bot, Update, InputMediaPhoto, PhotoSize, bot
 from telegram.ext import CallbackContext, CommandHandler, Filters, MessageHandler, Updater
 
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # context. Error handlers also receive the raised TelegramError object in error.
 
 LOG_ACTIONS = []
+CITY = 'Nizhny Novgorod'
 
 
 def log_action(function):
@@ -264,9 +265,8 @@ def admin_check_period(update: Update, context: CallbackContext):
 @log_action
 @decorator_error
 def weather(update: Update, context: CallbackContext):
-    TOKEN = 'd081cc3b0aa6fbb8e8f24d1a8216be49'
-    CITY = 'Nizhny Novgorod'
-    url = f'http://api.weatherstack.com/current?access_key={TOKEN}&query={CITY}'
+
+    url = f'http://api.weatherstack.com/current?access_key={TOKEN_WEATHER}&query={CITY}'
 
     r = requests.get(url)
     r = r.json()
