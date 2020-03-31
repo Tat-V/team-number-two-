@@ -25,27 +25,64 @@ logger = logging.getLogger(__name__)
 LOG_ACTIONS = []
 CITY = 'Nizhny Novgorod'
 
+class files:
+    HistoryFile = "History.txt"
+    AdminHistoryFile = "Admin_History.txt"
+    FilmFile = 'Film Library.txt'
+    def NewLog(self,update,funcname):
+        LOG_ACTIONS.append({
+            'user': update.effective_user.first_name,
+            'user id': update.message.chat.id,
+            'function': funcname,
+            'message': update.message.text,
+            'time': datetime.now().strftime("%Y-%m-%d %H.%M"), })
+        if str(LOG_ACTIONS[-1]['function']).find('admin') == -1:
+            with open(files.HistoryFile, "a", encoding="UTF-8") as file_h:
+                for key, value in LOG_ACTIONS[-1].items():
+                    file_h.write(key + ':' + (str(value)) + "\t")
+                file_h.write("\n")
+        elif str(LOG_ACTIONS[-1]['function']).find('admin') != -1:
+            with open(files.AdminHistoryFile, "a", encoding="UTF-8") as handler:
+                for key, value in LOG_ACTIONS[-1].items():
+                    handler.write(key + ':' + (str(value)) + "\t")
+                handler.write("\n")
+    def history(self):
+        """Send user last 5 records from history."""
+        hist = ""
+        with open(files.HistoryFile, "r", encoding="UTF-8") as file_h:
+            hist_all = file_h.readlines()
+            if len(hist_all) > 4:
+                for i in range(-1, -6, -1):
+                    hist += hist_all[i]
+            else:
+                hist = "\t".join(hist_all)
+        return hist
+    def DeleteLogs(self):
+        k = 0
+        with open(files.HistoryFile, "r", encoding="UTF-8") as file_h:
+            hist_all = file_h.readlines()
+        for hist_line in hist_all:
+            hist_line = hist_line.split('\t')
+            hist_time = hist_line[-2].replace('time:', '')
+            hist_time = datetime.strptime(hist_time, "%Y-%m-%d %H.%M")
+            now = datetime.now()
+            period = now - hist_time
+            print(period)
+            if period.days < 7:
+                break
+            k += 1
+            print(k)
+        with open(files.HistoryFile, 'w') as file_h:
+            file_h.writelines(hist_all[k:])
+        
+
 
 def log_action(function):
     def inner(*args, **kwargs):
         update = args[0]
+        funcname = function.__name__
         if update and hasattr(update, 'message') and hasattr(update, 'effective_user'):
-            LOG_ACTIONS.append({
-            'user': update.effective_user.first_name,
-            'user id': update.message.chat.id,
-            'function': function.__name__,
-            'message': update.message.text,
-            'time': datetime.now().strftime("%Y-%m-%d %H.%M"), })
-            if str(LOG_ACTIONS[-1]['function']).find('admin') == -1:
-                with open("History.txt", "a", encoding="UTF-8") as file_h:
-                    for key, value in LOG_ACTIONS[-1].items():
-                        file_h.write(key + ':' + (str(value)) + "\t")
-                    file_h.write("\n")
-            elif str(LOG_ACTIONS[-1]['function']).find('admin') != -1:
-                with open("Admin_History.txt", "a", encoding="UTF-8") as handler:
-                    for key, value in LOG_ACTIONS[-1].items():
-                        handler.write(key + ':' + (str(value)) + "\t")
-                    handler.write("\n")
+            files.NewLog(files, update, funcname)
         return function(*args, **kwargs)
     return inner
 
@@ -108,7 +145,7 @@ def admin_settings(update: Update, context: CallbackContext):
 @log_action
 @decorator_error
 def film(update: Update, context: CallbackContext):
-    text = open('Film Library.txt','r')
+    text = open(files.FilmFile, 'r')
     film_list = text.read().split()
     film_name = film_list[random.randint(0, len(film_list)-1)]
     url = f"https://imdb-internet-movie-database-unofficial.p.rapidapi.com/film/{film_name}"
@@ -227,37 +264,12 @@ def error(update: Update, context: CallbackContext):
 @log_action
 @decorator_error
 def history(update: Update, context: CallbackContext):
-    """Send user last 5 records from history."""
-    # file_hist = open("History.txt", "r", encoding="UTF-8")
-    hist = ""
-    with open("History.txt", "r", encoding="UTF-8") as file_h:
-        hist_all = file_h.readlines()
-        if len(hist_all) > 4:
-            for i in range(-1, -6, -1):
-                hist += hist_all[i]
-        else:
-            hist = "\t".join(hist_all)
-        update.message.reply_text(hist)
+    update.message.reply_text(files.history(files))
 
 @log_action
 @decorator_error
 def admin_check_period(update: Update, context: CallbackContext):
-    k = 0
-    with open("History.txt", "r", encoding="UTF-8") as file_h:
-        hist_all = file_h.readlines()
-    for hist_line in hist_all:
-        hist_line = hist_line.split('\t')
-        hist_time = hist_line[-2].replace('time:', '')
-        hist_time = datetime.strptime(hist_time, "%Y-%m-%d %H.%M")
-        now = datetime.now()
-        period = now - hist_time
-        print(period)
-        if period.days < 7:
-            break
-        k += 1
-        print(k)
-    with open('History.txt', 'w') as file_h:
-        file_h.writelines(hist_all[k:])
+    files.DeleteLogs(files)
     mes = 'Готово!'
     update.message.reply_text(mes)
 
