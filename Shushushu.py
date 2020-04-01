@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
+import csv
 import random
 from datetime import datetime, date, timedelta
 import requests
@@ -29,6 +30,7 @@ class files:
     HistoryFile = "History.txt"
     AdminHistoryFile = "Admin_History.txt"
     FilmFile = 'Film Library.txt'
+    CovidFile = 'CovidTable.txt'
     def NewLog(self,update,funcname):
         LOG_ACTIONS.append({
             'user': update.effective_user.first_name,
@@ -74,7 +76,67 @@ class files:
             print(k)
         with open(files.HistoryFile, 'w') as file_h:
             file_h.writelines(hist_all[k:])
-        
+
+class CovidStats:
+    def Upload(self):
+        yesterday = date.today() - timedelta(days=1)
+        y = str(yesterday)[: 4]
+        m = str(yesterday)[5: 7]
+        d = str(yesterday)[8:]
+        url = f'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{m}-{d}-{y}.csv'
+        data = pd.read_csv(url)
+        return data
+
+    def Sort(self, data, ascending):
+        data = data.sort_values('Confirmed', ascending=ascending)
+        data['Province_State'] = data['Province_State'].fillna('')
+        return data
+
+    def GetTopFive(self,data,):
+        top_5 = data[['Province_State', 'Country_Region', 'Last_Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
+        text = ''
+        for col in top_5:
+            text += col + '\t\t'
+        text += '\n\n'
+        for i in top_5.values:
+            for j in i:
+                text += str(j) + '\t\t'
+            text += '\n\n'
+        return text
+    def StatsPicture(self,data):
+        week_ago = date.today() - timedelta(days=7)
+        y = str(week_ago)[: 4]
+        m = str(week_ago)[5: 7]
+        d = str(week_ago)[8:]
+
+        url = f'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{m}-{d}-{y}.csv'
+        data_ago = pd.read_csv(url)
+        data_ago = data_ago.sort_values('Confirmed', ascending=False)
+
+        all_confirmed = data['Confirmed'].sum()
+        all_confirmed_ago = data_ago['Confirmed'].sum()
+        all_dead = data['Deaths'].sum()
+        all_dead_ago = data_ago['Deaths'].sum()
+        all_recov = data['Recovered'].sum()
+        all_recov_ago = data_ago['Recovered'].sum()
+
+        fig, ax = plt.subplots(figsize=(15, 15))
+        ax.bar("Confirmed til yesterday", all_confirmed, color="#FFA07A")
+        ax.bar("Confirmed til week ago", all_confirmed_ago, color="#7CFC00")
+        ax.bar("Dead til yesterday", all_dead, color="#FFA07A")
+        ax.bar("Dead til week ago", all_dead_ago, color="#7CFC00")
+        ax.bar("Recovered til yesterday", all_recov, color="#FFA07A")
+        ax.bar("Recovered til week ago", all_recov_ago, color="#7CFC00")
+        plt.title("Covid_statistics")
+        fig.savefig("Covid_statistics")
+
+        fig, ax = plt.subplots(figsize=(15, 15))
+
+        ax.bar("Confirmed", all_confirmed - all_confirmed_ago, color="#FFA07A")
+        ax.bar("Dead", all_dead - all_dead_ago, color="#B0E0E6")
+        ax.bar("Recovered", all_recov - all_recov_ago, color="#7CFC00")
+        plt.title("Weekly changes in...")
+        fig.savefig("Covid_weekly_changes")
 
 
 def log_action(function):
@@ -168,68 +230,18 @@ def film(update: Update, context: CallbackContext):
 @decorator_error
 def covid(update: Update, context: CallbackContext):
     '''Send user top-5 covid infected provinces'''
-
-    yesterday = date.today() - timedelta(days=1)
-    y = str(yesterday)[: 4]
-    m = str(yesterday)[5: 7]
-    d = str(yesterday)[8:]
-
-    url=f'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{m}-{d}-{y}.csv'
-    data = pd.read_csv(url)
-    data = data.sort_values('Confirmed', ascending=False)
-    #data['Province/State'] = data['Province/State'].fillna('')
-    data['Province_State'] = data['Province_State'].fillna('')
-    #top_5 = data[['Province/State', 'Country/Region', 'Last Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
-    top_5 = data[['Province_State', 'Country_Region', 'Last_Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
-
-    text = ''
-    for col in top_5:
-        text += col + '\t\t'
-    text += '\n\n'
-    for i in top_5.values:
-        for j in i:
-            text += str(j) + '\t\t'
-        text += '\n\n'
-
-    week_ago = date.today() - timedelta(days=7)
-    y = str(week_ago)[: 4]
-    m = str(week_ago)[5: 7]
-    d = str(week_ago)[8:]
-
-    url = f'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{m}-{d}-{y}.csv'
-    data_ago = pd.read_csv(url)
-    data_ago = data_ago.sort_values('Confirmed', ascending=False)
-
-    all_confirmed = data['Confirmed'].sum()
-    all_confirmed_ago = data_ago['Confirmed'].sum()
-    all_dead = data['Deaths'].sum()
-    all_dead_ago = data_ago['Deaths'].sum()
-    all_recov = data['Recovered'].sum()
-    all_recov_ago = data_ago['Recovered'].sum()
-
-    fig, ax = plt.subplots(figsize=(15, 15))
-    ax.bar("Confirmed til yesterday", all_confirmed, color="#FFA07A")
-    ax.bar("Confirmed til week ago", all_confirmed_ago, color="#7CFC00")
-    ax.bar("Dead til yesterday", all_dead, color="#FFA07A")
-    ax.bar("Dead til week ago", all_dead_ago, color="#7CFC00")
-    ax.bar("Recovered til yesterday", all_recov, color="#FFA07A")
-    ax.bar("Recovered til week ago", all_recov_ago, color="#7CFC00")
-    plt.title("Covid_statistics")
-    fig.savefig("Covid_statistics")
-
-    fig, ax = plt.subplots(figsize=(15, 15))
-
-    ax.bar("Confirmed", all_confirmed - all_confirmed_ago, color="#FFA07A")
-    ax.bar("Dead", all_dead - all_dead_ago, color="#B0E0E6")
-    ax.bar("Recovered", all_recov - all_recov_ago, color="#7CFC00")
-    plt.title("Weekly changes in...")
-    fig.savefig("Covid_weekly_changes")
-
-    update.message.reply_text('There you can find some statistic about top-5 covid injected regions')
+    data = CovidStats.Upload(CovidStats)
+    data = CovidStats.Sort(CovidStats,data,False)
+    text = CovidStats.GetTopFive(CovidStats,data)
+    update.message.reply_text( 'Here you can find some statistic about top-5 covid infected regions')
     update.message.reply_text(text)
+    update.message.reply_text('And about about top-5 covid least infected regions')
+    data = CovidStats.Sort(CovidStats, data, True)
+    text = CovidStats.GetTopFive(CovidStats, data)
+    update.message.reply_text(text)
+    CovidStats.StatsPicture(CovidStats,data)
     bot.send_photo(update.message.chat.id, open('Covid_statistics.png', 'rb'))
     bot.send_photo(update.message.chat.id, open('Covid_weekly_changes.png', 'rb'))
-
 
 @log_action
 @decorator_error
@@ -296,6 +308,13 @@ def weather(update: Update, context: CallbackContext):
 
 @log_action
 @decorator_error
+def test(update: Update, context: CallbackContext):
+    CovidStats.csv_writer(CovidStats)
+
+
+
+@log_action
+@decorator_error
 def fact(update: Update, context: CallbackContext):
     r = requests.get('https://cat-fact.herokuapp.com/facts')
     cat_fact = ''
@@ -332,6 +351,8 @@ def main():
     updater.dispatcher.add_handler(CommandHandler('smile', smile))
     updater.dispatcher.add_handler(CommandHandler('weather', weather))
     updater.dispatcher.add_handler(CommandHandler('film', film))
+    updater.dispatcher.add_handler(CommandHandler('test', test))
+
 
     # on noncommand i.e message - echo the message on Telegram
     updater.dispatcher.add_handler(MessageHandler(Filters.text, echo))
