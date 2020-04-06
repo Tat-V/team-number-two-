@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import logging
-import csv
 import random
 from datetime import datetime, date, timedelta
 import requests
@@ -25,12 +24,19 @@ logger = logging.getLogger(__name__)
 
 LOG_ACTIONS = []
 CITY = 'Nizhny Novgorod'
-
+bot = Bot(
+    token=TOKEN,
+    base_url=PROXY,  # delete it if connection via VPN
+)
+class CovidStatistics:
+    def top_five(self):
+        raise RuntimeError
+    def image_create(self):
+        raise RuntimeError
 class files:
     HistoryFile = "History.txt"
     AdminHistoryFile = "Admin_History.txt"
     FilmFile = 'Film Library.txt'
-    CovidFile = 'CovidTable.txt'
     def NewLog(self,update,funcname):
         LOG_ACTIONS.append({
             'user': update.effective_user.first_name,
@@ -77,7 +83,7 @@ class files:
         with open(files.HistoryFile, 'w') as file_h:
             file_h.writelines(hist_all[k:])
 
-class CovidStats:
+class CovidStats(CovidStatistics):
     def Upload(self):
         yesterday = date.today() - timedelta(days=1)
         y = str(yesterday)[: 4]
@@ -92,7 +98,7 @@ class CovidStats:
         data['Province_State'] = data['Province_State'].fillna('')
         return data
 
-    def GetTopFive(self,data,):
+    def top_five(self, data):
         top_5 = data[['Province_State', 'Country_Region', 'Last_Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
         text = ''
         for col in top_5:
@@ -103,7 +109,7 @@ class CovidStats:
                 text += str(j) + '\t\t'
             text += '\n\n'
         return text
-    def StatsPicture(self,data):
+    def image_create(self,data):
         week_ago = date.today() - timedelta(days=7)
         y = str(week_ago)[: 4]
         m = str(week_ago)[5: 7]
@@ -137,6 +143,75 @@ class CovidStats:
         ax.bar("Recovered", all_recov - all_recov_ago, color="#7CFC00")
         plt.title("Weekly changes in...")
         fig.savefig("Covid_weekly_changes")
+
+
+class CovidStatsDaily(CovidStatistics):
+    @staticmethod
+    def read_covid_data(date):
+        y = str(date)[: 4]
+        m = str(date)[5: 7]
+        d = str(date)[8:]
+
+        url = f'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{m}-{d}-{y}.csv'
+        return pd.read_csv(url)
+
+    def __init__(self):
+        self.today = date.today() - timedelta(days=1)  # т.к. выкладывают поздно, от-но мск времени
+        self.yesterday = date.today() - timedelta(days=2)
+
+        self.data_t = self.read_covid_data(self.today)
+        self.data_y = self.read_covid_data(self.yesterday)
+
+        self.data_t = self.data_t.sort_values('Confirmed', ascending=False)
+        self.data_y = self.data_y.sort_values('Confirmed', ascending=False)
+
+        self.confirmed_dif = self.data_t['Confirmed'].sum() - self.data_y['Confirmed'].sum()
+        self.dead_dif = self.data_t['Deaths'].sum() - self.data_y['Deaths'].sum()
+        self.recov_dif = self.data_t['Recovered'].sum() - self.data_y['Recovered'].sum()
+
+    def image_create(self):
+        fig, ax = plt.subplots(figsize=(15, 15))
+
+        ax.bar("Confirmed", self.confirmed_dif, color="#FFA07A")
+        ax.bar("Dead", self.dead_dif, color="#B0E0E6")
+        ax.bar("Recovered", self.recov_dif, color="#7CFC00")
+        # plt.text("Confirmed", all_confirmed_dif, str(all_confirmed_dif))
+        plt.title(f"Daily changes in... (from {self.yesterday} to {self.today})")
+        fig.savefig("Covid_stats")
+
+    def top_five(self):
+        top_5_t = self.data_t[
+                      ['Province_State', 'Country_Region', 'Last_Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
+        top_5_y = self.data_y[
+                      ['Province_State', 'Country_Region', 'Last_Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
+
+        fig = plt.figure(figsize=(15, 15))
+        plt.subplot(1, 2, 1).set_title("Today")
+        ax = plt.pie(top_5_t["Confirmed"], labels=top_5_t["Country_Region"], autopct='%1.1f%%')
+        plt.subplot(1, 2, 2).set_title("Yesterday")
+        ax = plt.pie(top_5_y["Confirmed"], labels=top_5_t["Country_Region"], autopct='%1.1f%%')
+        fig.savefig("Top_5_pie")
+
+        fig = plt.figure(figsize=(15, 15))
+        plt.subplot(2, 1, 1).set_title("Today")
+        ax = plt.bar(top_5_t["Country_Region"], top_5_t["Confirmed"], color="#FF6347")
+        plt.subplot(2, 1, 2).set_title("Yesterday")
+        ax = plt.bar(top_5_y["Country_Region"], top_5_y["Confirmed"], color="#87CEFA")
+        fig.savefig("Top_5_bar")
+
+        self.data_t = self.data_t.sort_values('Deaths', ascending=False)
+        self.data_y = self.data_y.sort_values('Deaths', ascending=False)
+        top_5_t = self.data_t[
+                      ['Province_State', 'Country_Region', 'Last_Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
+        top_5_y = self.data_y[
+                      ['Province_State', 'Country_Region', 'Last_Update', 'Confirmed', 'Deaths', 'Recovered']].iloc[:5]
+
+        fig = plt.figure(figsize=(15, 15))
+        plt.subplot(2, 1, 1).set_title("Today")
+        ax = plt.bar(top_5_t["Country_Region"], top_5_t["Deaths"], color="#FF6347")
+        plt.subplot(2, 1, 2).set_title("Yesterday")
+        ax = plt.bar(top_5_y["Country_Region"], top_5_y["Deaths"], color="#87CEFA")
+        fig.savefig("Top_5_bar_death")
 
 
 def log_action(function):
@@ -195,6 +270,23 @@ def rbc_news(update: Update, context: CallbackContext):
     # r = requests.post(url, files=files, data=data)
     # print(r.json())
 
+@log_action
+@decorator_error
+def corona_stats_dynamics(update: Update, context: CallbackContext):
+    cd = CovidStatsDaily()
+    cd.image_create()
+    cd.top_five()
+
+    update.message.reply_text('Below you\'ll be provided with daily changes in covid-19 statistics')
+    Bot.send_photo(bot, update.message.chat.id, open('Covid_stats.png', 'rb'))
+    update.message.reply_text('Top-5 injured countries by Confirmed')
+    Bot.send_photo(bot, update.message.chat.id, open('Top_5_pie.png', 'rb'))
+    Bot.send_photo(bot, update.message.chat.id, open('Top_5_bar.png', 'rb'))
+    update.message.reply_text('Top-5 injured countries by Death')
+    Bot.send_photo(bot, update.message.chat.id, open('Top_5_bar_death.png', 'rb'))
+
+
+
 
 @log_action
 @decorator_error
@@ -232,16 +324,16 @@ def covid(update: Update, context: CallbackContext):
     '''Send user top-5 covid infected provinces'''
     data = CovidStats.Upload(CovidStats)
     data = CovidStats.Sort(CovidStats,data,False)
-    text = CovidStats.GetTopFive(CovidStats,data)
+    text = CovidStats.top_five(CovidStats,data)
     update.message.reply_text( 'Here you can find some statistic about top-5 covid infected regions')
     update.message.reply_text(text)
     update.message.reply_text('And about about top-5 covid least infected regions')
     data = CovidStats.Sort(CovidStats, data, True)
-    text = CovidStats.GetTopFive(CovidStats, data)
+    text = CovidStats.top_five(CovidStats, data)
     update.message.reply_text(text)
-    CovidStats.StatsPicture(CovidStats,data)
-    bot.send_photo(update.message.chat.id, open('Covid_statistics.png', 'rb'))
-    bot.send_photo(update.message.chat.id, open('Covid_weekly_changes.png', 'rb'))
+    CovidStats.image_create(CovidStats,data)
+    Bot.send_photo(bot, update.message.chat.id, open('Covid_statistics.png', 'rb'))
+    Bot.send_photo(bot, update.message.chat.id, open('Covid_weekly_changes.png', 'rb'))
 
 @log_action
 @decorator_error
@@ -306,11 +398,6 @@ def weather(update: Update, context: CallbackContext):
     update.message.reply_text(weather_now)
 
 
-@log_action
-@decorator_error
-def test(update: Update, context: CallbackContext):
-    CovidStats.csv_writer(CovidStats)
-
 
 
 @log_action
@@ -332,10 +419,6 @@ def fact(update: Update, context: CallbackContext):
 
 
 def main():
-    bot = Bot(
-        token=TOKEN,
-        base_url=PROXY,  # delete it if connection via VPN
-    )
     updater = Updater(bot=bot, use_context=True)
 
     # on different commands - answer in Telegram
@@ -351,7 +434,7 @@ def main():
     updater.dispatcher.add_handler(CommandHandler('smile', smile))
     updater.dispatcher.add_handler(CommandHandler('weather', weather))
     updater.dispatcher.add_handler(CommandHandler('film', film))
-    updater.dispatcher.add_handler(CommandHandler('test', test))
+    updater.dispatcher.add_handler(CommandHandler('dynamics', corona_stats_dynamics))
 
 
     # on noncommand i.e message - echo the message on Telegram
