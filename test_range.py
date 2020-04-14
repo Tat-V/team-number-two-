@@ -50,5 +50,5 @@ class TestRange(unittest.TestCase):
         with self.assertRaises(TypeError):
             self.data.generate()
 
-    if __name__ == 'main':
+    if __name__ == '__main__':
         unittest.main()
