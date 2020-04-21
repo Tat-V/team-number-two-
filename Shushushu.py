@@ -5,11 +5,15 @@ import logging
 import random
 from datetime import datetime, date, timedelta
 import requests
+import os
 from functools import wraps
 from selenium import webdriver
 import pandas as pd
 import matplotlib.pyplot as plt
 from setup import PROXY, TOKEN, TOKEN_WEATHER
+from google.cloud import speech_v1
+from google.cloud.speech_v1 import enums
+import subprocess
 from telegram import Bot, Update, InputMediaPhoto, PhotoSize, bot
 from telegram.ext import CallbackContext, CommandHandler, Filters, MessageHandler, Updater
 
@@ -28,22 +32,31 @@ bot = Bot(
     token=TOKEN,
     base_url=PROXY,  # delete it if connection via VPN
 )
+
+
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "path_to_your_.json_credential_file"
+
 class CovidStatistics:
     def top_five(self):
         raise RuntimeError
+
     def image_create(self):
         raise RuntimeError
+
+
+
 class files:
     HistoryFile = "History.txt"
     AdminHistoryFile = "Admin_History.txt"
     FilmFile = 'Film Library.txt'
-    def NewLog(self,update,funcname):
+
+    def NewLog(self, update, funcname):
         LOG_ACTIONS.append({
             'user': update.effective_user.first_name,
             'user id': update.message.chat.id,
             'function': funcname,
             'message': update.message.text,
-            'time': datetime.now().strftime("%Y-%m-%d %H.%M"), })
+            'time': datetime.now().strftime("%Y-%m-%d %H.%M")})
         if str(LOG_ACTIONS[-1]['function']).find('admin') == -1:
             with open(files.HistoryFile, "a", encoding="UTF-8") as file_h:
                 for key, value in LOG_ACTIONS[-1].items():
@@ -54,6 +67,7 @@ class files:
                 for key, value in LOG_ACTIONS[-1].items():
                     handler.write(key + ':' + (str(value)) + "\t")
                 handler.write("\n")
+
     def history(self):
         """Send user last 5 records from history."""
         hist = ""
@@ -65,6 +79,7 @@ class files:
             else:
                 hist = "\t".join(hist_all)
         return hist
+
     def DeleteLogs(self):
         k = 0
         with open(files.HistoryFile, "r", encoding="UTF-8") as file_h:
@@ -82,6 +97,7 @@ class files:
             print(k)
         with open(files.HistoryFile, 'w') as file_h:
             file_h.writelines(hist_all[k:])
+
 
 class CovidStats(CovidStatistics):
     def Upload(self):
@@ -109,6 +125,7 @@ class CovidStats(CovidStatistics):
                 text += str(j) + '\t\t'
             text += '\n\n'
         return text
+
     def image_create(self,data):
         week_ago = date.today() - timedelta(days=7)
         y = str(week_ago)[: 4]
@@ -143,6 +160,44 @@ class CovidStats(CovidStatistics):
         ax.bar("Recovered", all_recov - all_recov_ago, color="#7CFC00")
         plt.title("Weekly changes in...")
         fig.savefig("Covid_weekly_changes")
+
+
+class UrlRequests:
+    def get_film(self, update):
+        text = open(files.FilmFile, 'r')
+        film_list = text.read().split()
+        film_name = film_list[random.randint(0, len(film_list) - 1)]
+        url = f"https://imdb-internet-movie-database-unofficial.p.rapidapi.com/film/{film_name}"
+        headers = {
+            'x-rapidapi-host': "imdb-internet-movie-database-unofficial.p.rapidapi.com",
+            'x-rapidapi-key': "99bdeb0c42mshab03bca44e75a6fp188e06jsn6d8755719252"
+        }
+        r = requests.request("GET", url, headers=headers)
+        r = dict(r.json())
+        title = r['title']
+        rating = r['rating']
+        length = r['length']
+        main_role = r['cast'][0]['actor']
+        return [title,rating,length,main_role]
+
+    def get_weather(TOKEN, CITY):
+        url = f'http://api.weatherstack.com/current?access_key={TOKEN}&query={CITY}'
+
+        r = requests.get(url)
+        if r.status_code == 200:
+            r = r.json()
+            city = r.get('request')['query']
+            time = r.get('current')['observation_time']
+            temperature = r.get('current')['temperature']
+            weather_descriptions = r.get('current')['weather_descriptions'][0]
+            wind_speed = r.get('current')['wind_speed']
+            wind_speed = round(wind_speed * 1000.0 / 3600.0)
+            weather_now = 'Город: ' + city + '\n' + 'Время снятия данных: ' + str(time) + '\n' + 'Температура: ' + \
+                          str(temperature) + '℃' + '\n' + 'Скорость ветра: ' + str(wind_speed) + ' м/c' + '\n' \
+                          + weather_descriptions
+        else:
+            weather_now = 'Функция в данный момент недоступна'
+        return weather_now
 
 
 class CovidStatsDaily(CovidStatistics):
@@ -214,6 +269,50 @@ class CovidStatsDaily(CovidStatistics):
         fig.savefig("Top_5_bar_death")
 
 
+class SpeechToText:
+    def __init__(self, local_file_path):
+        self.local_file_path = local_file_path
+
+    def sample_recognize(self):
+        transcript = ''
+        client = speech_v1.SpeechClient()
+        language_code = "ru-RU"
+        sample_rate_hertz = 48000
+        encoding = enums.RecognitionConfig.AudioEncoding.LINEAR16
+        config = {
+            "language_code": language_code,
+            "sample_rate_hertz": sample_rate_hertz,
+            "encoding": encoding,
+        }
+        with io.open(self.local_file_path, "rb") as f:
+            content = f.read()
+        audio = {"content": content}
+        response = client.recognize(config, audio)
+        for result in response.results:
+            alternative = result.alternatives[0]
+            transcript = alternative.transcript
+        if transcript == '':
+            transcript = 'Не удалось перевести.'
+        return transcript
+
+
+def voice_message(update: Update, context: CallbackContext):
+    file_info = context.bot.get_file(update.message.voice.file_id)
+    file_info.download('VOICE.ogg')
+    command = [
+        r'Project\bin\ffmpeg.exe', # путь до ffmpeg.exe
+        '-i', 'VOICE.ogg',
+        '-ar', '48000',
+        'VOICE.wav'
+    ]
+    proc = subprocess.Popen(command)
+    proc.wait()
+    transcript = SpeechToText("./VOICE.wav")
+    update.message.reply_text(transcript.sample_recognize())
+    path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'VOICE.wav')
+    os.remove(path)
+
+
 def log_action(function):
     def inner(*args, **kwargs):
         update = args[0]
@@ -238,15 +337,10 @@ def decorator_error(func):
 @decorator_error
 def start(update: Update, context: CallbackContext):
     """Send a message when the command /start is issued."""
-    update.message.reply_text(f'Привет, {update.effective_user.first_name}!\nОтправь команду /list, чтобы получить '
+    update.message.reply_text(f'Привет, {update.effective_user.first_name}!\nОтправь команду /help, чтобы получить '
                               f'список команд!')
 
 
-@log_action
-@decorator_error
-def chat_help(update: Update, context: CallbackContext):
-    """Send a message when the command /help is issued."""
-    update.message.reply_text('Введи команду /start для начала. ')
 
 
 @log_action
@@ -299,22 +393,9 @@ def admin_settings(update: Update, context: CallbackContext):
 @log_action
 @decorator_error
 def film(update: Update, context: CallbackContext):
-    text = open(files.FilmFile, 'r')
-    film_list = text.read().split()
-    film_name = film_list[random.randint(0, len(film_list)-1)]
-    url = f"https://imdb-internet-movie-database-unofficial.p.rapidapi.com/film/{film_name}"
-    headers = {
-        'x-rapidapi-host': "imdb-internet-movie-database-unofficial.p.rapidapi.com",
-        'x-rapidapi-key': "99bdeb0c42mshab03bca44e75a6fp188e06jsn6d8755719252"
-    }
-    r = requests.request("GET", url, headers=headers)
-    r = dict(r.json())
-    title = r['title']
-    rating = r['rating']
-    length = r['length']
-    main_role = r['cast'][0]['actor']
-    update.message.reply_text('Название: '+title+'\n'+'Рейтинг на IMDb: '+rating+'\n'+'Длительность: '+length+'\n'+'В '
-                             'главной роли: '+main_role)
+    data = UrlRequests.get_film(UrlRequests, update)
+    update.message.reply_text('Название: ' + data[0] +'\n'+'Рейтинг на IMDb: ' + data[1] + '\n'+'Длительность: '
+                              + data[2]+'\n'+'В главной роли:' + data[3])
 
 
 
@@ -348,9 +429,9 @@ def smile(update: Update, context: CallbackContext):
 
 @log_action
 @decorator_error
-def chat_list(update: Update, context: CallbackContext):
+def help(update: Update, context: CallbackContext):
     """Send a list of all available functions when the command /list is issued."""
-    update.message.reply_text('Доступные команды:\n/start\n/help\n/history\n/fact\n/weather\n/smile\n/film\n/covid')
+    update.message.reply_text('Доступные команды:\n/history\n/fact\n/weather\n/smile\n/film\n/covid')
 
 
 @log_action
@@ -381,21 +462,7 @@ def admin_check_period(update: Update, context: CallbackContext):
 @log_action
 @decorator_error
 def weather(update: Update, context: CallbackContext):
-
-    url = f'http://api.weatherstack.com/current?access_key={TOKEN_WEATHER}&query={CITY}'
-
-    r = requests.get(url)
-    r = r.json()
-    city = r.get('request')['query']
-    time = r.get('current')['observation_time']
-    temperature = r.get('current')['temperature']
-    weather_descriptions = r.get('current')['weather_descriptions'][0]
-    wind_speed = r.get('current')['wind_speed']
-    wind_speed = round(wind_speed * 1000.0 / 3600.0)
-    weather_now = 'Город: ' + city + '\n' + 'Время снятия данных: ' + str(time) + '\n' + 'Температура: ' +\
-                  str(temperature) + '℃' + '\n' + 'Скорость ветра: ' + str(wind_speed) + ' м/c' + '\n'\
-                  + weather_descriptions
-    update.message.reply_text(weather_now)
+    update.message.reply_text(UrlRequests.get_weather(TOKEN_WEATHER, CITY))
 
 
 
@@ -423,9 +490,8 @@ def main():
 
     # on different commands - answer in Telegram
     updater.dispatcher.add_handler(CommandHandler('start', start))
-    updater.dispatcher.add_handler(CommandHandler('help', chat_help))
+    updater.dispatcher.add_handler(CommandHandler('help', help))
     updater.dispatcher.add_handler(CommandHandler('history', history))
-    updater.dispatcher.add_handler(CommandHandler('list', chat_list))
     updater.dispatcher.add_handler(CommandHandler('settings', admin_settings))
     updater.dispatcher.add_handler(CommandHandler('clean', admin_check_period))
     updater.dispatcher.add_handler(CommandHandler('fact', fact))
@@ -439,6 +505,7 @@ def main():
 
     # on noncommand i.e message - echo the message on Telegram
     updater.dispatcher.add_handler(MessageHandler(Filters.text, echo))
+    updater.dispatcher.add_handler(MessageHandler(Filters.voice, voice_message))
 
     # log all errors
     updater.dispatcher.add_error_handler(error)
