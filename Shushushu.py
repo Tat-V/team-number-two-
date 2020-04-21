@@ -284,7 +284,7 @@ class SpeechToText:
             "sample_rate_hertz": sample_rate_hertz,
             "encoding": encoding,
         }
-        with io.open(self.local_file_path, "rb") as f:
+        with os.io.open(self.local_file_path, "rb") as f:
             content = f.read()
         audio = {"content": content}
         response = client.recognize(config, audio)
