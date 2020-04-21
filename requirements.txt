@@ -2,7 +2,6 @@ pandas
 requests
 config
 selenium
-PIL
 python-telegram-bot
 google.cloud
 subprocess
