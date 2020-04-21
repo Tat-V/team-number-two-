@@ -4,4 +4,3 @@ config
 selenium
 python-telegram-bot
 google-cloud-speech
-subprocess
