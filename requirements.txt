@@ -3,5 +3,5 @@ requests
 config
 selenium
 python-telegram-bot
-google.cloud
+google-cloud-speech
 subprocess
