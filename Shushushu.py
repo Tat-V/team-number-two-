@@ -17,6 +17,9 @@ import subprocess
 from telegram import Bot, Update, InputMediaPhoto, PhotoSize, bot
 from telegram.ext import CallbackContext, CommandHandler, Filters, MessageHandler, Updater
 
+import pymongo
+from pymongo import MongoClient
+
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -32,6 +35,9 @@ bot = Bot(
     token=TOKEN,
     base_url=PROXY,  # delete it if connection via VPN
 )
+client = MongoClient('localhost', 27017)
+db = client.test_database
+collection = db.test_collection
 
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "path_to_your_.json_credential_file"
@@ -57,6 +63,12 @@ class files:
             'function': funcname,
             'message': update.message.text,
             'time': datetime.now().strftime("%Y-%m-%d %H.%M")})
+        collection.insert_one({
+            'user': update.effective_user.first_name,
+            'user id': update.message.chat.id,
+            'function': funcname,
+            'message': update.message.text,
+            'time': datetime.now().strftime("%Y-%m-%d %H.%M")})
         if str(LOG_ACTIONS[-1]['function']).find('admin') == -1:
             with open(files.HistoryFile, "a", encoding="UTF-8") as file_h:
                 for key, value in LOG_ACTIONS[-1].items():
@@ -70,15 +82,22 @@ class files:
 
     def history(self):
         """Send user last 5 records from history."""
-        hist = ""
-        with open(files.HistoryFile, "r", encoding="UTF-8") as file_h:
-            hist_all = file_h.readlines()
-            if len(hist_all) > 4:
-                for i in range(-1, -6, -1):
-                    hist += hist_all[i]
-            else:
-                hist = "\t".join(hist_all)
-        return hist
+        # hist = ""
+        # with open(files.HistoryFile, "r", encoding="UTF-8") as file_h:
+        #     hist_all = file_h.readlines()
+        #     if len(hist_all) > 4:
+        #         for i in range(-1, -6, -1):
+        #             hist += hist_all[i]
+        #     else:
+        #         hist = "\t".join(hist_all)
+        # return hist
+        hist = []
+        for idx, user in enumerate(collection.find().sort("_id", pymongo.DESCENDING).limit(5)):
+            if idx == 5:
+                break
+            hist.append("\t".join([key + "\t" + str(user[key]) for key in user if key != "_id"]))
+        hist_st = "\n".join(hist)
+        return hist_st
 
     def DeleteLogs(self):
         k = 0
@@ -98,6 +117,7 @@ class files:
         with open(files.HistoryFile, 'w') as file_h:
             file_h.writelines(hist_all[k:])
 
+covid_collection = db.test_collection
 
 class CovidStats(CovidStatistics):
     def Upload(self):
@@ -106,7 +126,15 @@ class CovidStats(CovidStatistics):
         m = str(yesterday)[5: 7]
         d = str(yesterday)[8:]
         url = f'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{m}-{d}-{y}.csv'
-        data = pd.read_csv(url)
+        # data = pd.read_csv(url)
+        try:
+            data = pd.read_csv(covid_collection.find())
+        except:
+            data = pd.read_csv(url)
+            with open("Covid.csv", "wb") as file_c:
+                file_c.write(requests.get(url).content)
+                data_dict = data.to_dict(orient='records')
+                covid_collection.insert_many(data_dict)
         return data
 
     def Sort(self, data, ascending):
@@ -431,7 +459,8 @@ def smile(update: Update, context: CallbackContext):
 @decorator_error
 def help(update: Update, context: CallbackContext):
     """Send a list of all available functions when the command /list is issued."""
-    update.message.reply_text('Доступные команды:\n/history\n/fact\n/weather\n/smile\n/film\n/covid')
+    update.message.reply_text('Доступные команды:\n/history\n/fact\n/weather\n/smile\n/film\n/covid\n'
+                              '/news\n/dynamics\n')
 
 
 @log_action
