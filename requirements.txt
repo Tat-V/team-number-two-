@@ -4,3 +4,5 @@ config
 selenium
 python-telegram-bot
 google-cloud-speech
+mathplotlib
+pymongo
